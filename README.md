@@ -38,16 +38,13 @@ websocat ws://localhost:8081/ws
 Build and push an image that your cluster can pull:
 
 ```sh
-IMAGE=registry.example.com/http-sink-tap:latest
-docker build -t "$IMAGE" .
-docker push "$IMAGE"
+DOCKER_REGISTRY=registry.example.com make docker-build docker-push
 ```
 
-Apply the manifests and set the image:
+Apply the manifests with the image from your registry:
 
 ```sh
-kubectl apply -f k8s/http-sink-tap.yaml
-kubectl -n http-sink-tap set image deployment/http-sink-tap http-sink-tap="$IMAGE"
+DOCKER_REGISTRY=registry.example.com make deploy
 ```
 
 Port-forward both ports:
