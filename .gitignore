@@ -1,0 +1,4 @@
+/http-sink-tap
+*.test
+coverage.out
+.DS_Store
