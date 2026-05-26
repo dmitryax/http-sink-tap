@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
         - name: http-sink-tap
-          image: ghcr.io/dmitryax/http-sink-tap:latest
+          image: danoshin276/http-sink-tap:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: sink

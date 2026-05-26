@@ -67,6 +67,17 @@ type CapturedBody struct {
 	ReadError string `json:"read_error,omitempty"`
 }
 
+type MethodStats struct {
+	Calls      int64 `json:"calls"`
+	TotalBytes int64 `json:"total_bytes"`
+}
+
+type Stats struct {
+	ByMethod map[string]*MethodStats `json:"by_method"`
+	ByPath   map[string]*MethodStats `json:"by_path"`
+	Total    MethodStats             `json:"total"`
+}
+
 type Broker struct {
 	mu           sync.Mutex
 	nextID       uint64
@@ -74,6 +85,11 @@ type Broker struct {
 	clientQueue  int
 	history      []CapturedRequest
 	clients      map[chan CapturedRequest]struct{}
+	stats        struct {
+		byMethod map[string]*MethodStats
+		byPath   map[string]*MethodStats
+		total    MethodStats
+	}
 }
 
 func NewBroker(historyLimit, clientQueue int) *Broker {
@@ -83,11 +99,14 @@ func NewBroker(historyLimit, clientQueue int) *Broker {
 	if clientQueue <= 0 {
 		clientQueue = defaultClientQueue
 	}
-	return &Broker{
+	b := &Broker{
 		historyLimit: historyLimit,
 		clientQueue:  clientQueue,
 		clients:      make(map[chan CapturedRequest]struct{}),
 	}
+	b.stats.byMethod = make(map[string]*MethodStats)
+	b.stats.byPath = make(map[string]*MethodStats)
+	return b
 }
 
 func (b *Broker) Publish(req CapturedRequest) CapturedRequest {
@@ -96,6 +115,23 @@ func (b *Broker) Publish(req CapturedRequest) CapturedRequest {
 
 	b.nextID++
 	req.ID = b.nextID
+
+	bytes := int64(req.Body.Size)
+	if ms, ok := b.stats.byMethod[req.Method]; ok {
+		ms.Calls++
+		ms.TotalBytes += bytes
+	} else {
+		b.stats.byMethod[req.Method] = &MethodStats{Calls: 1, TotalBytes: bytes}
+	}
+	pathKey := req.Method + " " + req.Path
+	if ms, ok := b.stats.byPath[pathKey]; ok {
+		ms.Calls++
+		ms.TotalBytes += bytes
+	} else {
+		b.stats.byPath[pathKey] = &MethodStats{Calls: 1, TotalBytes: bytes}
+	}
+	b.stats.total.Calls++
+	b.stats.total.TotalBytes += bytes
 
 	if b.historyLimit > 0 {
 		if len(b.history) == b.historyLimit {
@@ -116,6 +152,33 @@ func (b *Broker) Publish(req CapturedRequest) CapturedRequest {
 	}
 
 	return req
+}
+
+func (b *Broker) GetStats() Stats {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	s := Stats{
+		ByMethod: make(map[string]*MethodStats, len(b.stats.byMethod)),
+		ByPath:   make(map[string]*MethodStats, len(b.stats.byPath)),
+		Total:    b.stats.total,
+	}
+	for k, v := range b.stats.byMethod {
+		cp := *v
+		s.ByMethod[k] = &cp
+	}
+	for k, v := range b.stats.byPath {
+		cp := *v
+		s.ByPath[k] = &cp
+	}
+	return s
+}
+
+func (b *Broker) ResetStats() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.stats.byMethod = make(map[string]*MethodStats)
+	b.stats.byPath = make(map[string]*MethodStats)
+	b.stats.total = MethodStats{}
 }
 
 func (b *Broker) Register() (<-chan CapturedRequest, []CapturedRequest, func()) {
@@ -278,6 +341,15 @@ func listenerHandler(broker *Broker) http.Handler {
 	mux.HandleFunc("/requests", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(broker.History())
+	})
+	mux.HandleFunc("/stats", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(broker.GetStats())
+	})
+	mux.HandleFunc("/reset", func(w http.ResponseWriter, r *http.Request) {
+		broker.ResetStats()
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write([]byte("reset\n"))
 	})
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		serveWebSocket(w, r, broker, upgrader)
