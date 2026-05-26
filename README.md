@@ -38,13 +38,13 @@ websocat ws://localhost:8081/ws
 Build and push an image that your cluster can pull:
 
 ```sh
-DOCKER_REGISTRY=registry.example.com make docker-build docker-push
+DOCKER_REGISTRY=ghcr.io/example make docker-build docker-push
 ```
 
 Apply the manifests with the image from your registry:
 
 ```sh
-DOCKER_REGISTRY=registry.example.com make deploy
+DOCKER_REGISTRY=ghcr.io/example make deploy
 ```
 
 Port-forward both ports:

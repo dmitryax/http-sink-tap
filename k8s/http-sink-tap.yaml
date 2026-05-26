@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
         - name: http-sink-tap
-          image: registry.example.com/http-sink-tap:latest
+          image: ${DOCKER_REGISTRY}/${APP}:${TAG}
           imagePullPolicy: IfNotPresent
           ports:
             - name: sink
