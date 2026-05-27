@@ -21,7 +21,16 @@ define render_k8s_manifest
 DOCKER_REGISTRY="$(DOCKER_REGISTRY)" APP="$(APP)" TAG="$(TAG)" envsubst '$$DOCKER_REGISTRY $$APP $$TAG' < $(K8S_MANIFEST)
 endef
 
-.PHONY: test run docker-build docker-push k8s-manifest deploy port-forward
+.PHONY: lint test run docker-build docker-push k8s-manifest deploy port-forward
+
+lint:
+	@unformatted="$$(gofmt -l .)"; \
+	if [ -n "$$unformatted" ]; then \
+		echo "Files need gofmt:"; \
+		echo "$$unformatted"; \
+		exit 1; \
+	fi
+	go vet ./...
 
 test:
 	go test ./...
