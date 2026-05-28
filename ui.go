@@ -213,9 +213,16 @@ const indexHTML = `<!doctype html>
 
       socket.addEventListener("message", (event) => {
         const req = JSON.parse(event.data);
+        const followNewest = shouldFollowNewest();
         requests.push(req);
-        selectedId = req.id;
-        render();
+        if (followNewest) {
+          selectedId = req.id;
+        }
+        render({
+          preserveDetailScroll: !followNewest,
+          preserveListScroll: !followNewest,
+          preservePrependedRows: !followNewest,
+        });
       });
 
       socket.addEventListener("close", () => {
@@ -229,10 +236,27 @@ const indexHTML = `<!doctype html>
       });
     }
 
-    function render() {
+    function shouldFollowNewest() {
+      const newest = requests[requests.length - 1];
+      return selectedId === null || (newest && selectedId === newest.id);
+    }
+
+    function render(options = {}) {
+      const listScrollTop = list.scrollTop;
+      const listScrollHeight = list.scrollHeight;
+      const detailScrollTop = detail.scrollTop;
+
       renderList();
+      if (options.preserveListScroll) {
+        const prependedHeight = options.preservePrependedRows ? list.scrollHeight - listScrollHeight : 0;
+        list.scrollTop = listScrollTop + prependedHeight;
+      }
+
       const selected = requests.find((req) => req.id === selectedId) || requests[requests.length - 1];
       renderDetail(selected);
+      if (options.preserveDetailScroll) {
+        detail.scrollTop = detailScrollTop;
+      }
     }
 
     function renderList() {
@@ -250,8 +274,12 @@ const indexHTML = `<!doctype html>
         row.className = "row" + (req.id === selectedId ? " active" : "");
         row.type = "button";
         row.addEventListener("click", () => {
+          const alreadySelected = selectedId === req.id;
           selectedId = req.id;
-          render();
+          render({
+            preserveDetailScroll: alreadySelected,
+            preserveListScroll: true,
+          });
         });
 
         const method = document.createElement("div");
